@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import StartupIntro from './StartupIntro'
+import { useAuth } from './AuthProvider'
+import LoginScreen from './LoginScreen'
 import {
   ArrowDownWideNarrow, ArrowLeft, ArrowRight, CalendarDays, Check, CheckCheck,
   Circle, Clock3, FolderKanban, Inbox, Languages, LayoutDashboard,
-  ListTodo, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Sun, Trash2,
+  ListTodo, LogOut, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Sun, Trash2,
   X, Zap
 } from 'lucide-react'
 import { db, type Priority, type Project, type Task } from './db'
@@ -35,12 +38,33 @@ const localDate = (date = new Date()) => {
 }
 
 function App() {
+  const { t } = useTranslation()
+  const { session, initializing, sessionExpired, startupIssue, signOut } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const logout = useCallback(async () => {
+    await signOut()
+    navigate('/login', { replace: true })
+  }, [navigate, signOut])
+
+  if (initializing) {
+    return <div className="auth-checking" role="status"><img src="/brand/kriya-kram-wordmark.png" alt="" /><span>{t('auth.checkingSession')}</span></div>
+  }
+  if (!session) return <LoginScreen sessionExpired={sessionExpired} startupIssue={startupIssue} />
+  if (location.pathname === '/login') return <Navigate to="/today" replace />
+
+  return <WorkspaceApp onLogout={logout} />
+}
+
+function WorkspaceApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [introComplete, setIntroComplete] = useState(false)
+  const completeIntro = useCallback(() => setIntroComplete(true), [])
   const [online, setOnline] = useState(navigator.onLine)
   const [dark, setDark] = useState(localStorage.getItem('kk-theme') === 'dark')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(localStorage.getItem('kk-sidebar-collapsed') === 'yes')
@@ -222,7 +246,8 @@ function App() {
   const completionRate = tasks.length ? Math.round(doneCount / tasks.length * 100) : 0
 
   return (
-    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <>
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${introComplete ? 'app-revealed' : 'app-concealed'}`}>
       <aside className={`sidebar ${drawerOpen ? 'sidebar-open' : ''}`}>
         <Link className="brand" to="/today" onClick={() => setDrawerOpen(false)} aria-label={t('brand')}>
           <img className="brand-wordmark" src="/brand/kriya-kram-logo.png" alt={t('brand')} />
@@ -287,7 +312,7 @@ function App() {
                   }} />
                 } />
                 <Route path="/productivity" element={<ProductivityPage tasks={tasks} finishedToday={finishedToday} finishedWeek={finishedWeek} pending={pendingCount} completionRate={completionRate} onNew={() => startNewTask()} />} />
-                <Route path="/settings" element={<SettingsPage dark={dark} setDark={setDark} language={i18n.language} onLanguage={changeLanguage} installAvailable={Boolean(installPrompt)} standalone={standalone} onInstall={() => void installApp()} />} />
+                <Route path="/settings" element={<SettingsPage dark={dark} setDark={setDark} language={i18n.language} onLanguage={changeLanguage} installAvailable={Boolean(installPrompt)} standalone={standalone} onInstall={() => void installApp()} onLogout={onLogout} />} />
                 <Route path="*" element={<TaskPage title={title} route={route} tasks={filteredTasks} allTasks={tasks} projects={projects} loading={loading} query={search} onQuick={addQuickTask} quickTitle={quickTitle} setQuickTitle={setQuickTitle} onNew={() => startNewTask()} onEdit={task => setEditor(task)} onComplete={toggleTask} onDelete={deleteTask} onClear={() => setSearch('')} />} />
               </Routes>
             </div>
@@ -304,6 +329,8 @@ function App() {
       {projectEditor && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setProjectEditor(false) }}><form className="modal project-modal" role="dialog" aria-modal="true" aria-labelledby="project-dialog-title" onSubmit={addProject}><div className="modal-top"><h2 id="project-dialog-title">{t('labels.createProject')}</h2><button type="button" className="icon-button" onClick={() => setProjectEditor(false)} aria-label={t('labels.close')}><X size={19} /></button></div><label>{t('labels.projectName')}<input name="name" autoFocus required maxLength={80} /></label><div className="modal-actions"><button type="button" className="button button-quiet" onClick={() => setProjectEditor(false)}>{t('labels.cancel')}</button><button className="button button-primary">{t('labels.createProject')}</button></div></form></div>}
       {toast && <div className="toast"><Check size={15} />{toast}</div>}
     </div>
+    {!introComplete && <StartupIntro onComplete={completeIntro} />}
+    </>
   )
 }
 
@@ -471,13 +498,27 @@ function Stat({ icon: Icon, label, value, accent = false }: { icon: typeof Check
   return <div className={`stat-card ${accent ? 'stat-accent' : ''}`}><span className="stat-icon"><Icon size={17} /></span><span className="stat-label">{label}</span><strong>{value}</strong></div>
 }
 
-function SettingsPage({ dark, setDark, language, onLanguage, installAvailable, standalone, onInstall }: { dark: boolean; setDark: (value: boolean) => void; language: string; onLanguage: (value: string) => void; installAvailable: boolean; standalone: boolean; onInstall: () => void }) {
+function SettingsPage({ dark, setDark, language, onLanguage, installAvailable, standalone, onInstall, onLogout }: { dark: boolean; setDark: (value: boolean) => void; language: string; onLanguage: (value: string) => void; installAvailable: boolean; standalone: boolean; onInstall: () => void; onLogout: () => Promise<void> }) {
   const { t } = useTranslation()
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState(false)
+  const logout = async () => {
+    setLogoutError(false)
+    setLoggingOut(true)
+    try {
+      await onLogout()
+    } catch {
+      setLogoutError(true)
+    } finally {
+      setLoggingOut(false)
+    }
+  }
   return <section className="settings-page"><div className="page-heading"><div><div className="eyebrow">{t('brand')}</div><h1>{t('nav.settings')}</h1><p className="page-subtitle">{t('labels.settingsInfo')}</p></div></div>
     <div className="settings-card"><div className="setting-row"><span className="setting-icon"><Languages size={18} /></span><div className="setting-copy"><strong>{t('labels.language')}</strong><span>हिन्दी · ગુજરાતી · English</span></div><select value={language} onChange={event => onLanguage(event.target.value)} aria-label={t('labels.language')}><option value="en">English</option><option value="hi">हिन्दी</option><option value="gu">ગુજરાતી</option></select></div>
       <div className="setting-row"><span className="setting-icon">{dark ? <Moon size={18} /> : <Sun size={18} />}</span><div className="setting-copy"><strong>{t('labels.theme')}</strong><span>{dark ? t('labels.dark') : t('labels.light')}</span></div><button className={`switch ${dark ? 'switch-on' : ''}`} role="switch" aria-checked={dark} onClick={() => setDark(!dark)}><span /></button></div>
       {!standalone && <div className="setting-row"><span className="setting-icon"><Plus size={18} /></span><div className="setting-copy"><strong>{t('labels.install')}</strong><span>{installAvailable ? '' : t('labels.installHelp')}</span></div>{installAvailable && <button className="button button-primary" onClick={onInstall}>{t('labels.install')}</button>}</div>}
     </div>
+    <div className="settings-logout"><button className="button button-quiet" onClick={() => void logout()} disabled={loggingOut}><LogOut size={16} />{loggingOut ? t('auth.signingOut') : t('auth.logout')}</button>{logoutError && <p className="login-error" role="alert">{t('auth.errors.logout')}</p>}</div>
     <div className="settings-note"><span className="local-check"><Check size={12} /></span><div><strong>{t('labels.localOnly')}</strong><p>{t('labels.cloudNotice')}</p></div></div>
   </section>
 }

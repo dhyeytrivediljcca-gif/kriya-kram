@@ -1,0 +1,18 @@
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
+const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
+
+export const sharedAccountEmail = import.meta.env.VITE_SHARED_ACCOUNT_EMAIL?.trim() ?? ''
+
+export const supabase = supabaseUrl && publishableKey
+  ? createClient(supabaseUrl, publishableKey, {
+      auth: {
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        persistSession: true
+      }
+    })
+  : null
+
+export const authConfigured = Boolean(supabase && sharedAccountEmail)

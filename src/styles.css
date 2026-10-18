@@ -56,6 +56,75 @@ a { color: inherit; text-decoration: none; }
 button { cursor: pointer; }
 
 .app-shell { min-height: 100vh; }
+.auth-checking, .login-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+  background: var(--page);
+  color: var(--text);
+}
+.auth-checking { display: grid; place-content: center; justify-items: center; gap: 17px; color: var(--muted); font-size: 12px; }
+.auth-checking img { width: min(54vw, 260px); height: auto; }
+.login-screen { position: relative; display: grid; place-items: center; padding: 84px 22px 58px; }
+.login-preferences { position: absolute; top: max(18px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 8px; }
+.login-card { width: min(100%, 420px); padding: clamp(27px, 7vw, 42px); border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+.login-wordmark { display: block; width: min(72%, 270px); height: auto; margin: 0 auto 29px; }
+:root[data-theme='dark'] .login-wordmark,
+:root[data-theme='dark'] .auth-checking img { filter: brightness(0) invert(92%) sepia(7%); }
+.login-card h1 { margin: 0; text-align: center; font-size: clamp(22px, 6vw, 27px); letter-spacing: -.04em; font-weight: 600; }
+.login-description { margin: 9px 0 27px; color: var(--muted); text-align: center; font-size: 12px; line-height: 1.6; }
+.login-form { display: grid; gap: 10px; }
+.login-form > label { font-size: 12px; font-weight: 600; }
+.login-password-wrap { display: flex; min-height: 47px; align-items: center; gap: 8px; padding: 0 9px 0 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--page); }
+.login-password-wrap:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent); }
+.login-password-wrap input { flex: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; }
+.login-password-wrap input::placeholder { color: var(--muted); }
+.login-password-toggle { width: 34px; height: 34px; display: grid; place-items: center; flex: none; border: 0; border-radius: 7px; background: transparent; color: var(--muted); }
+.login-password-toggle:hover { background: var(--soft); color: var(--text); }
+.login-submit { width: 100%; min-height: 45px; margin-top: 8px; }
+.login-submit:disabled { cursor: wait; opacity: .72; }
+.login-error { margin: 2px 0 0; color: var(--danger); font-size: 11px; line-height: 1.5; }
+.login-footer { position: absolute; right: 20px; bottom: max(15px, env(safe-area-inset-bottom)); left: 20px; margin: 0; color: var(--muted); text-align: center; font-size: 10px; }
+.settings-logout { display: grid; justify-items: start; gap: 5px; margin-top: 16px; }
+.settings-logout .button { color: var(--danger); }
+.app-shell.app-concealed { visibility: hidden; opacity: 0; transform: translateY(8px); pointer-events: none; }
+.app-shell.app-revealed { animation: app-reveal .48s cubic-bezier(.2,.7,.25,1) both; }
+@keyframes app-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.startup-intro {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 23px;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: var(--page);
+  animation: intro-exit .55s ease 2.6s both;
+}
+.startup-wordmark {
+  display: block;
+  width: min(61vw, 460px);
+  height: auto;
+  clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+  animation: wordmark-write 2s cubic-bezier(.62,.02,.38,1) .18s both, wordmark-exit .55s ease 2.6s both;
+  will-change: clip-path;
+}
+:root[data-theme='dark'] .startup-wordmark { filter: brightness(0) invert(92%) sepia(7%); }
+.startup-accent { width: 28px; height: 2px; border-radius: 2px; background: var(--forest); opacity: .45; }
+@keyframes wordmark-write {
+  0% { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+  20% { clip-path: polygon(0 0, 19% 0, 16% 100%, 0 100%); }
+  50% { clip-path: polygon(0 0, 55% 0, 53% 100%, 0 100%); }
+  80% { clip-path: polygon(0 0, 84% 0, 82% 100%, 0 100%); }
+  100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+@keyframes intro-exit {
+  to { opacity: 0; }
+}
+@keyframes wordmark-exit {
+  to { opacity: 0; transform: scale(.96); }
+}
 .sidebar { width: 248px; position: fixed; z-index: 10; inset: 0 auto 0 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; background: var(--sidebar); color: #f6f7ed; display: flex; flex-direction: column; padding: 26px 18px 19px; transition: width .18s ease, padding .18s ease; }
 .brand { display: block; height: 61px; margin: 0 6px; overflow: hidden; border-radius: 5px; background: #fff8e8; }
 .brand img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -326,6 +395,7 @@ button { cursor: pointer; }
   .task-more { opacity: 1; }
 }
 @media (max-width: 420px) {
+  .startup-wordmark { width: min(78vw, 400px); }
   .page-wrap { padding-right: 14px; padding-left: 14px; }
   .breadcrumb strong { max-width: 94px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .search-box { width: 31px; gap: 5px; padding: 0 5px; }
@@ -339,4 +409,6 @@ button { cursor: pointer; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  .startup-wordmark { animation: none !important; clip-path: none; }
+  .startup-intro { animation-delay: 500ms !important; animation-duration: 250ms !important; }
 }
