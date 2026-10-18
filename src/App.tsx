@@ -4,15 +4,17 @@ import { useTranslation } from 'react-i18next'
 import StartupIntro from './StartupIntro'
 import { useAuth } from './AuthProvider'
 import LoginScreen from './LoginScreen'
+import AdminUsersPage from './AdminUsersPage'
+import SetPasswordScreen from './SetPasswordScreen'
 import {
   ArrowDownWideNarrow, ArrowLeft, ArrowRight, CalendarDays, Check, CheckCheck,
   Circle, Clock3, FolderKanban, Inbox, Languages, LayoutDashboard,
   ListTodo, LogOut, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Sun, Trash2,
-  X, Zap
+  Users, X, Zap
 } from 'lucide-react'
-import { db, type Priority, type Project, type Task } from './db'
+import { getUserDatabase, type KriyaDatabase, type Priority, type Project, type Task } from './db'
 
-type RouteKey = 'inbox' | 'today' | 'upcoming' | 'calendar' | 'tasks' | 'completed' | 'projects' | 'productivity' | 'settings'
+type RouteKey = 'inbox' | 'today' | 'upcoming' | 'calendar' | 'tasks' | 'completed' | 'projects' | 'productivity' | 'settings' | 'admin'
 type TaskDraft = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedAt' | 'completed'>
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -50,13 +52,40 @@ function App() {
   if (initializing) {
     return <div className="auth-checking" role="status"><img src="/brand/kriya-kram-wordmark.png" alt="" /><span>{t('auth.checkingSession')}</span></div>
   }
+  if (location.pathname === '/set-password') {
+    if (!session) return <LoginScreen sessionExpired={sessionExpired} startupIssue={startupIssue} />
+    return <SetPasswordScreen />
+  }
   if (!session) return <LoginScreen sessionExpired={sessionExpired} startupIssue={startupIssue} />
   if (location.pathname === '/login') return <Navigate to="/today" replace />
+  if (location.pathname === '/admin' && session.user.app_metadata.role !== 'admin') return <Navigate to="/today" replace />
 
-  return <WorkspaceApp onLogout={logout} />
+  return <WorkspaceBootstrap key={session.user.id} userId={session.user.id} isAdmin={session.user.app_metadata.role === 'admin'} email={session.user.email ?? ''} onLogout={logout} />
 }
 
-function WorkspaceApp({ onLogout }: { onLogout: () => Promise<void> }) {
+function WorkspaceBootstrap({ userId, isAdmin, email, onLogout }: { userId: string; isAdmin: boolean; email: string; onLogout: () => Promise<void> }) {
+  const { t } = useTranslation()
+  const [database, setDatabase] = useState<KriyaDatabase | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    setDatabase(null)
+    setFailed(false)
+    void getUserDatabase(userId).then(nextDatabase => {
+      if (active) setDatabase(nextDatabase)
+    }).catch(() => {
+      if (active) setFailed(true)
+    })
+    return () => { active = false }
+  }, [userId])
+
+  if (failed) return <main className="login-screen"><section className="login-card"><h1>{t('labels.saveError')}</h1><p className="login-error">{t('admin.errors.localDatabase')}</p><button className="button button-primary" onClick={() => window.location.reload()}>{t('admin.retry')}</button></section></main>
+  if (!database) return <div className="auth-checking" role="status"><img src="/brand/kriya-kram-wordmark.png" alt="" /><span>{t('auth.loadingAccount')}</span></div>
+  return <WorkspaceApp database={database} isAdmin={isAdmin} email={email} onLogout={onLogout} />
+}
+
+function WorkspaceApp({ database: db, isAdmin, email, onLogout }: { database: KriyaDatabase; isAdmin: boolean; email: string; onLogout: () => Promise<void> }) {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
@@ -80,7 +109,9 @@ function WorkspaceApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [toast, setToast] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const route = location.pathname.split('/')[1] as RouteKey
+  const rawRoute = location.pathname.split('/')[1] as RouteKey
+  const route = rawRoute === 'admin' && !isAdmin ? 'today' : rawRoute
+  const visibleNavItems = isAdmin ? [...navItems, { key: 'admin' as const, path: '/admin', icon: Users }] : navItems
 
   const refresh = useCallback(async () => {
     const [nextTasks, nextProjects] = await Promise.all([
@@ -261,7 +292,7 @@ function WorkspaceApp({ onLogout }: { onLogout: () => Promise<void> }) {
           <Plus size={17} strokeWidth={2.5} /> {t('labels.addTask')}
         </button>
         <nav className="main-nav" aria-label="Main navigation">
-          {navItems.map(({ key, path, icon: Icon }) => (
+          {visibleNavItems.map(({ key, path, icon: Icon }) => (
             <Link key={key} aria-label={t(`nav.${key}`)} title={sidebarCollapsed ? t(`nav.${key}`) : undefined} to={path} onClick={() => { setDrawerOpen(false); if (key === 'projects') setProjectView(null) }} className={`nav-link ${route === key ? 'active' : ''}`}>
               <Icon size={18} strokeWidth={1.8} /><span>{t(`nav.${key}`)}</span>
               {key === 'today' && pendingCount > 0 && <span className="nav-count">{tasks.filter(task => !task.completed && task.dueDate <= localDate()).length}</span>}
@@ -312,7 +343,8 @@ function WorkspaceApp({ onLogout }: { onLogout: () => Promise<void> }) {
                   }} />
                 } />
                 <Route path="/productivity" element={<ProductivityPage tasks={tasks} finishedToday={finishedToday} finishedWeek={finishedWeek} pending={pendingCount} completionRate={completionRate} onNew={() => startNewTask()} />} />
-                <Route path="/settings" element={<SettingsPage dark={dark} setDark={setDark} language={i18n.language} onLanguage={changeLanguage} installAvailable={Boolean(installPrompt)} standalone={standalone} onInstall={() => void installApp()} onLogout={onLogout} />} />
+                <Route path="/settings" element={<SettingsPage dark={dark} setDark={setDark} language={i18n.language} onLanguage={changeLanguage} installAvailable={Boolean(installPrompt)} standalone={standalone} onInstall={() => void installApp()} onLogout={onLogout} email={email} isAdmin={isAdmin} />} />
+                {isAdmin && <Route path="/admin" element={<AdminUsersPage />} />}
                 <Route path="*" element={<TaskPage title={title} route={route} tasks={filteredTasks} allTasks={tasks} projects={projects} loading={loading} query={search} onQuick={addQuickTask} quickTitle={quickTitle} setQuickTitle={setQuickTitle} onNew={() => startNewTask()} onEdit={task => setEditor(task)} onComplete={toggleTask} onDelete={deleteTask} onClear={() => setSearch('')} />} />
               </Routes>
             </div>
@@ -498,7 +530,7 @@ function Stat({ icon: Icon, label, value, accent = false }: { icon: typeof Check
   return <div className={`stat-card ${accent ? 'stat-accent' : ''}`}><span className="stat-icon"><Icon size={17} /></span><span className="stat-label">{label}</span><strong>{value}</strong></div>
 }
 
-function SettingsPage({ dark, setDark, language, onLanguage, installAvailable, standalone, onInstall, onLogout }: { dark: boolean; setDark: (value: boolean) => void; language: string; onLanguage: (value: string) => void; installAvailable: boolean; standalone: boolean; onInstall: () => void; onLogout: () => Promise<void> }) {
+function SettingsPage({ dark, setDark, language, onLanguage, installAvailable, standalone, onInstall, onLogout, email, isAdmin }: { dark: boolean; setDark: (value: boolean) => void; language: string; onLanguage: (value: string) => void; installAvailable: boolean; standalone: boolean; onInstall: () => void; onLogout: () => Promise<void>; email: string; isAdmin: boolean }) {
   const { t } = useTranslation()
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState(false)
@@ -515,6 +547,7 @@ function SettingsPage({ dark, setDark, language, onLanguage, installAvailable, s
   }
   return <section className="settings-page"><div className="page-heading"><div><div className="eyebrow">{t('brand')}</div><h1>{t('nav.settings')}</h1><p className="page-subtitle">{t('labels.settingsInfo')}</p></div></div>
     <div className="settings-card"><div className="setting-row"><span className="setting-icon"><Languages size={18} /></span><div className="setting-copy"><strong>{t('labels.language')}</strong><span>हिन्दी · ગુજરાતી · English</span></div><select value={language} onChange={event => onLanguage(event.target.value)} aria-label={t('labels.language')}><option value="en">English</option><option value="hi">हिन्दी</option><option value="gu">ગુજરાતી</option></select></div>
+      <div className="setting-row"><span className="setting-icon"><Users size={18} /></span><div className="setting-copy"><strong>{t('auth.account')}</strong><span>{email}</span></div>{isAdmin && <Link className="button button-quiet" to="/admin">{t('nav.admin')}</Link>}</div>
       <div className="setting-row"><span className="setting-icon">{dark ? <Moon size={18} /> : <Sun size={18} />}</span><div className="setting-copy"><strong>{t('labels.theme')}</strong><span>{dark ? t('labels.dark') : t('labels.light')}</span></div><button className={`switch ${dark ? 'switch-on' : ''}`} role="switch" aria-checked={dark} onClick={() => setDark(!dark)}><span /></button></div>
       {!standalone && <div className="setting-row"><span className="setting-icon"><Plus size={18} /></span><div className="setting-copy"><strong>{t('labels.install')}</strong><span>{installAvailable ? '' : t('labels.installHelp')}</span></div>{installAvailable && <button className="button button-primary" onClick={onInstall}>{t('labels.install')}</button>}</div>}
     </div>

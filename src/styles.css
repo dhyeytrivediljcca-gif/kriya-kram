@@ -83,9 +83,29 @@ button { cursor: pointer; }
 .login-submit { width: 100%; min-height: 45px; margin-top: 8px; }
 .login-submit:disabled { cursor: wait; opacity: .72; }
 .login-error { margin: 2px 0 0; color: var(--danger); font-size: 11px; line-height: 1.5; }
+.login-success { margin: 2px 0 0; color: var(--success); font-size: 11px; line-height: 1.5; }
 .login-footer { position: absolute; right: 20px; bottom: max(15px, env(safe-area-inset-bottom)); left: 20px; margin: 0; color: var(--muted); text-align: center; font-size: 10px; }
 .settings-logout { display: grid; justify-items: start; gap: 5px; margin-top: 16px; }
 .settings-logout .button { color: var(--danger); }
+.admin-invite { display: grid; gap: 8px; padding: 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.admin-invite > label { font-size: 11px; font-weight: 600; }
+.admin-invite-controls { display: flex; gap: 9px; }
+.admin-invite-controls input { flex: 1; min-width: 0; height: 40px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--page); color: var(--text); font-size: 12px; }
+.admin-invite-controls .button { white-space: nowrap; }
+.admin-guidance { margin: 9px 2px 17px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.admin-message { margin: 10px 0; color: var(--success); font-size: 11px; }
+.admin-error { color: var(--danger); }
+.admin-user-list { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.admin-user-row { min-height: 69px; display: flex; align-items: center; gap: 10px; padding: 10px 13px; border-bottom: 1px solid var(--line); }
+.admin-user-row:last-child { border-bottom: 0; }
+.admin-user-info { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.admin-user-info strong { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; }
+.admin-user-info span { color: var(--muted); font-size: 10px; }
+.admin-user-actions { display: flex; flex: none; gap: 1px; }
+.admin-user-actions button:disabled { opacity: .35; cursor: not-allowed; }
+.admin-delete-button { color: var(--danger); }
+.admin-empty { display: grid; justify-items: center; gap: 7px; padding: 28px; color: var(--muted); font-size: 11px; }
+.admin-empty p { margin: 0; }
 .app-shell.app-concealed { visibility: hidden; opacity: 0; transform: translateY(8px); pointer-events: none; }
 .app-shell.app-revealed { animation: app-reveal .48s cubic-bezier(.2,.7,.25,1) both; }
 @keyframes app-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

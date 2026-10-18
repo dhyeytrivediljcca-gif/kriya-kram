@@ -11,6 +11,7 @@ interface LoginScreenProps {
 function LoginScreen({ sessionExpired, startupIssue }: LoginScreenProps) {
   const { t, i18n } = useTranslation()
   const { configured, signIn } = useAuth()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -34,6 +35,10 @@ function LoginScreen({ sessionExpired, startupIssue }: LoginScreenProps) {
     event.preventDefault()
     if (submittingRef.current) return
     setError(null)
+    if (!username.trim()) {
+      setError('usernameRequired')
+      return
+    }
     if (!password) {
       setError('required')
       return
@@ -46,7 +51,7 @@ function LoginScreen({ sessionExpired, startupIssue }: LoginScreenProps) {
     submittingRef.current = true
     setSubmitting(true)
     try {
-      const result = await signIn(password)
+      const result = await signIn(username.trim().toLowerCase(), password)
       if (result.success) {
         setPassword('')
       } else {
@@ -81,6 +86,20 @@ function LoginScreen({ sessionExpired, startupIssue }: LoginScreenProps) {
         <h1 id="login-heading">{t('auth.heading')}</h1>
         <p className="login-description">{t('auth.description')}</p>
         <form className="login-form" onSubmit={event => void submit(event)}>
+          <label htmlFor="login-username">{t('auth.username')}</label>
+          <div className="login-password-wrap">
+            <input
+              id="login-username"
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              placeholder={t('auth.usernamePlaceholder')}
+              value={username}
+              onChange={event => setUsername(event.target.value)}
+              disabled={submitting}
+            />
+          </div>
           <label htmlFor="login-password">{t('auth.password')}</label>
           <div className="login-password-wrap">
             <input
@@ -110,7 +129,7 @@ function LoginScreen({ sessionExpired, startupIssue }: LoginScreenProps) {
           </button>
         </form>
       </section>
-      <p className="login-footer">{t('auth.sharedAccountNotice')}</p>
+      <p className="login-footer">{t('auth.accountNotice')}</p>
     </main>
   )
 }

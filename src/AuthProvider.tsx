@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { authConfigured, sharedAccountEmail, supabase } from './supabase'
+import { authConfigured, supabase } from './supabase'
 
-type AuthFailure = 'configuration' | 'invalidCredentials' | 'network'
+type AuthFailure = 'configuration' | 'invalidCredentials' | 'network' | 'serviceUnavailable'
 type AuthResult = { success: true } | { success: false; reason: AuthFailure }
 
 interface AuthContextValue {
@@ -11,7 +11,7 @@ interface AuthContextValue {
   sessionExpired: boolean
   startupIssue: 'network' | 'sessionExpired' | null
   configured: boolean
-  signIn: (password: string) => Promise<AuthResult>
+  signIn: (username: string, password: string) => Promise<AuthResult>
   signOut: () => Promise<void>
 }
 
@@ -20,11 +20,15 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 function isNetworkFailure(error: unknown) {
   if (!navigator.onLine) return true
   if (!(error instanceof Error)) return false
-  return error.name === 'AuthRetryableFetchError' || /fetch|network|timeout|connection/i.test(error.message)
+  if ('context' in error && error.context instanceof Response && error.context.status >= 500) return true
+  return error.name.toLowerCase().includes('fetch') || /fetch|network|timeout|connection/i.test(error.message)
 }
 
-function isSharedAccount(session: Session | null) {
-  return Boolean(session?.user.email && session.user.email.toLowerCase() === sharedAccountEmail.toLowerCase())
+function getSignInFailure(error: unknown): AuthFailure {
+  if (error && typeof error === 'object' && 'context' in error && error.context instanceof Response) {
+    if (error.context.status === 404 || error.context.status >= 500) return 'serviceUnavailable'
+  }
+  return isNetworkFailure(error) ? 'network' : 'invalidCredentials'
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -64,20 +68,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSessionExpired(true)
       }
 
-      if (nextSession && !isSharedAccount(nextSession)) {
-        updateSession(null)
-        setSessionExpired(false)
-        setStartupIssue('sessionExpired')
-        setInitializing(false)
-        void Promise.resolve().then(async () => {
-          const { error } = await client.auth.signOut({ scope: 'local' })
-          if (active && error) setStartupIssue('sessionExpired')
-        }).catch(() => {
-          if (active) setStartupIssue('sessionExpired')
-        })
-        return
-      }
-
       updateSession(nextSession)
       setInitializing(false)
       setStartupIssue(null)
@@ -92,15 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateSession(null)
         setSessionExpired(!networkFailure)
         setStartupIssue(networkFailure ? 'network' : 'sessionExpired')
-      } else if (data.session && !isSharedAccount(data.session)) {
-        updateSession(null)
-        setSessionExpired(false)
-        setStartupIssue('sessionExpired')
-        void client.auth.signOut({ scope: 'local' }).then(({ error: signOutError }) => {
-          if (active && signOutError) setStartupIssue('sessionExpired')
-        }).catch(() => {
-          if (active) setStartupIssue('sessionExpired')
-        })
       } else {
         updateSession(data.session)
         setStartupIssue(null)
@@ -124,24 +105,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [updateSession])
 
-  const signIn = useCallback(async (password: string): Promise<AuthResult> => {
+  const signIn = useCallback(async (username: string, password: string): Promise<AuthResult> => {
     if (!authConfigured || !supabase) return { success: false, reason: 'configuration' }
     if (!navigator.onLine) return { success: false, reason: 'network' }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: sharedAccountEmail,
-        password
+      const { data, error } = await supabase.functions.invoke<{
+        access_token: string
+        refresh_token: string
+      }>('username-login', {
+        body: { username, password }
       })
-      if (error) {
-        return { success: false, reason: isNetworkFailure(error) ? 'network' : 'invalidCredentials' }
+      if (error || !data?.access_token || !data.refresh_token) {
+        return { success: false, reason: error ? getSignInFailure(error) : 'invalidCredentials' }
       }
-      if (!isSharedAccount(data.session)) {
-        await supabase.auth.signOut({ scope: 'local' })
-        return { success: false, reason: 'invalidCredentials' }
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token
+      })
+      if (sessionError || !sessionData.session) {
+        return { success: false, reason: sessionError && isNetworkFailure(sessionError) ? 'network' : 'invalidCredentials' }
       }
 
-      updateSession(data.session)
+      updateSession(sessionData.session)
       setSessionExpired(false)
       setStartupIssue(null)
       return { success: true }
